@@ -1,6 +1,7 @@
 import pygame
 import random
 import math
+from button import Button
 
 # Initialize Pygame and constants
 pygame.init()
@@ -13,7 +14,7 @@ RED = (200, 0, 0)
 GREEN = (0, 200, 0)
 
 # Game constants/settings
-PLAYER_SPEED = 5
+PLAYER_SPEED = 3
 ENEMY_SPEED = 2
 PROJECTILE_SPEED = 7
 
@@ -107,63 +108,82 @@ enemies = pygame.sprite.Group()
 projectiles = pygame.sprite.Group()
 
 
+# --- Main menu Functions ---
+
+def main_menu():
+    pygame.display.set_caption("Spellwalk - Main Menu")
+
+    while True:
+        screen.fill((0, 0, 0))
+
+def options():
+    pass
+
+def play():
+    pass
+
+
 # --- Main game loop ---
-running = True
-clock = pygame.time.Clock()
-while running:
-    clock.tick(60) # 60 FPS
-    screen.fill((30, 30, 30)) # Clear screen with dark background
-    # Get pressed keys
-    keys = pygame.key.get_pressed()
+def main():
+    running = True
+    clock = pygame.time.Clock()
+    while running:
+        clock.tick(60) # 60 FPS
+        screen.fill((30, 30, 30)) # Clear screen with dark background
+        # Get pressed keys
+        keys = pygame.key.get_pressed()
 
-    # Event handling
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+        # Event handling
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-        # Spawn enemy event
-        elif event.type == SPAWN_ENEMY:
-            enemies.add(Enemy(player))
+            # Spawn enemy event
+            elif event.type == SPAWN_ENEMY:
+                enemies.add(Enemy(player))
 
-        # Fire projectile event
-        elif event.type == FIRE_PROJECTILE:
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            dx = mouse_x - player.rect.centerx
-            dy = mouse_y - player.rect.centery
-            dist = math.hypot(dx, dy)
-            if dist == 0:
-                dist = 1
-            direction = (dx / dist, dy / dist)
-            projectiles.add(Projectile(player.rect.center, direction))
+            # Fire projectile event
+            elif event.type == FIRE_PROJECTILE:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                dx = mouse_x - player.rect.centerx
+                dy = mouse_y - player.rect.centery
+                dist = math.hypot(dx, dy)
+                if dist == 0:
+                    dist = 1
+                direction = (dx / dist, dy / dist)
+                projectiles.add(Projectile(player.rect.center, direction))
 
-    # Update all sprite groups
-    player_group.update(keys)
-    enemies.update()
-    projectiles.update()
+        # Update all sprite groups
+        player_group.update(keys)
+        enemies.update()
+        projectiles.update()
 
 
-    # Collision detection for projectiles hitting enemies
-    for e in pygame.sprite.groupcollide(enemies, projectiles, True, True):
-        pass  # Enemy hit by projectile
+        # Collision detection for projectiles hitting enemies
+        for e in pygame.sprite.groupcollide(enemies, projectiles, True, True):
+            pass  # Enemy hit by projectile
 
-    # Check for collisions between player and enemies
-    if pygame.sprite.spritecollideany(player, enemies):
-        player.health -= 0.1
-        if player.health <= 0:
-            print("Game Over")
-            running = False
+        # Check for collisions between player and enemies
+        if pygame.sprite.spritecollideany(player, enemies):
+            player.health -= 0.1
+            if player.health <= 0:
+                print("Game Over")
+                running = False
 
-    # Draw all sprite groups
-    player_group.draw(screen)
-    enemies.draw(screen)
-    projectiles.draw(screen)
+        # Draw all sprite groups
+        player_group.draw(screen)
+        enemies.draw(screen)
+        projectiles.draw(screen)
 
-    # Draw health bar
-    pygame.draw.rect(screen, RED, (10, 10, 100, 20))
-    pygame.draw.rect(screen, GREEN, (10, 10, player.health, 20))
+        # Draw health bar
+        pygame.draw.rect(screen, RED, (10, 10, 100, 20))
+        pygame.draw.rect(screen, GREEN, (10, 10, player.health, 20))
     
-    # Update the display
-    pygame.display.flip()
+        # Update the display
+        pygame.display.flip()
 
-pygame.quit()
-# ...existing code...
+    pygame.quit()
+    # ...existing code...
+
+if __name__ == "__main__":
+    main()
