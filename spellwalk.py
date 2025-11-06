@@ -114,17 +114,59 @@ def main_menu():
     pygame.display.set_caption("Spellwalk - Main Menu")
 
     while True:
+        # Fill the background
         screen.fill((0, 0, 0))
+        mouse_pos = pygame.mouse.get_pos()
+
+        menu_text = pygame.font.Font(None, 80).render("Spellwalk", True, WHITE)
+        screen.blit(menu_text, (WIDTH // 2 - menu_text.get_width() // 2, 100))
+
+        # Create buttons
+        play_button = Button(None, (WIDTH // 2, HEIGHT // 2 - 50), "Play", pygame.font.Font(None, 40), WHITE, GREEN)
+        options_button = Button(None, (WIDTH // 2, HEIGHT // 2 + 10), "Options", pygame.font.Font(None, 40), WHITE, GREEN)
+        quit_button = Button(None, (WIDTH // 2, HEIGHT // 2 + 70), "Quit", pygame.font.Font(None, 40), WHITE, GREEN)
+
+        #Update and draw buttons
+        for button in [play_button, options_button, quit_button]:
+            button.change_color(mouse_pos)
+            button.update(screen)
+
+        # Event handling
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if play_button.check_for_input(mouse_pos):
+                    play()
+                if options_button.check_for_input(mouse_pos):
+                    options()
+                if quit_button.check_for_input(mouse_pos):
+                    pygame.quit()
+                    return
+                
+        # Update the display
+        pygame.display.flip()
+                
 
 def options():
-    pass
+    while True:
+        # Display options menu
+        screen.fill((50, 50, 50))
+        options_text = pygame.font.Font(None, 60).render("Options Menu - Press ESC to return", True, WHITE)
+        screen.blit(options_text, (WIDTH // 2 - options_text.get_width() // 2, HEIGHT // 2 - options_text.get_height() // 2))
+
+        # Event handling
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return
+        pygame.display.flip()
 
 def play():
-    pass
-
-
-# --- Main game loop ---
-def main():
     running = True
     clock = pygame.time.Clock()
     while running:
@@ -184,6 +226,11 @@ def main():
 
     pygame.quit()
     # ...existing code...
+
+
+# --- Main game loop ---
+def main():
+    main_menu()
 
 if __name__ == "__main__":
     main()
