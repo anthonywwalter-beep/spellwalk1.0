@@ -2,6 +2,9 @@ import pygame
 import random
 import math
 from button import Button
+import pygame_widgets
+from pygame_widgets.slider import Slider
+from pygame_widgets.textbox import TextBox
 
 # Initialize Pygame and constants
 pygame.init()
@@ -17,6 +20,7 @@ GREEN = (0, 200, 0)
 PLAYER_SPEED = 3
 ENEMY_SPEED = 2
 PROJECTILE_SPEED = 7
+enemy_dmg = 1
 
 # Timed events
 SPAWN_ENEMY = pygame.USEREVENT + 1
@@ -150,20 +154,38 @@ def main_menu():
                 
 
 def options():
+    
+    global enemy_dmg
+    slider = Slider(screen, 300, 300, 200, 20, min=1, max=10, step=1, initial=enemy_dmg)
+    textbox = TextBox(screen, 300, 250, 200, 40,
+                      fontSize=24, textColour=WHITE, colour=(40,40,40),
+                      borderThickness=2, borderColour=WHITE)
+    textbox.disable()
+    textbox.setText(f"Enemy DMG: {int(enemy_dmg)}")
+
     while True:
         # Display options menu
         screen.fill((50, 50, 50))
         options_text = pygame.font.Font(None, 60).render("Options Menu - Press ESC to return", True, WHITE)
-        screen.blit(options_text, (WIDTH // 2 - options_text.get_width() // 2, HEIGHT // 2 - options_text.get_height() // 2))
+        screen.blit(options_text, (WIDTH // 2 - options_text.get_width() // 2, 100))
+
+
 
         # Event handling
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    enemy_dmg = int(slider.getValue())
                     return
+                
+        textbox.setText(f"Enemy DMG: {int(slider.getValue())}")
+        enemy_dmg = int(slider.getValue())
+
+        pygame_widgets.update(events)
         pygame.display.flip()
 
 def play():
@@ -207,7 +229,7 @@ def play():
 
         # Check for collisions between player and enemies
         if pygame.sprite.spritecollideany(player, enemies):
-            player.health -= 0.1
+            player.health -= enemy_dmg
             if player.health <= 0:
                 print("Game Over")
                 running = False
@@ -223,8 +245,11 @@ def play():
     
         # Update the display
         pygame.display.flip()
-
-    pygame.quit()
+    player.health = 100  # Reset player health for next game
+    player.rect.center = (WIDTH // 2, HEIGHT // 2)  # Reset player position
+    enemies.empty()  # Clear enemies
+    projectiles.empty()  # Clear projectiles
+    main_menu()
     # ...existing code...
 
 
