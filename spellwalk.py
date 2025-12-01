@@ -6,6 +6,7 @@ import pygame_widgets
 from pygame_widgets.slider import Slider
 from pygame_widgets.textbox import TextBox
 
+
 # Initialize Pygame and constants
 pygame.init()
 WIDTH, HEIGHT = 800, 600
@@ -21,13 +22,16 @@ PLAYER_SPEED = 3
 ENEMY_SPEED = 2
 PROJECTILE_SPEED = 7
 enemy_dmg = 1
+SPAWNRATE = 2000  # Initial enemy spawn rate in milliseconds
+NEXT_WAVE_TIME = 30000  # Time until next wave in milliseconds
 
 # Timed events
 SPAWN_ENEMY = pygame.USEREVENT + 1
 FIRE_PROJECTILE = pygame.USEREVENT + 2
 
 # Set timers for spawning enemies and firing projectiles
-pygame.time.set_timer(SPAWN_ENEMY, 2000)
+
+pygame.time.set_timer(SPAWN_ENEMY, SPAWNRATE)
 pygame.time.set_timer(FIRE_PROJECTILE, 1000)
 
 
@@ -190,8 +194,14 @@ def options():
 
 def play():
     running = True
+    timer = pygame.time.get_ticks()
     clock = pygame.time.Clock()
+    wave = 1
     while running:
+        elapsed_time = pygame.time.get_ticks() - timer
+        if elapsed_time > NEXT_WAVE_TIME + (wave - 1) * 10000:
+            pygame.time.set_timer(SPAWN_ENEMY, SPAWNRATE // 2)
+            wave += 1  # Increase spawn rate after 30 seconds
         clock.tick(60) # 60 FPS
         screen.fill((30, 30, 30)) # Clear screen with dark background
         # Get pressed keys
@@ -233,7 +243,7 @@ def play():
             if player.health <= 0:
                 print("Game Over")
                 running = False
-
+        
         # Draw all sprite groups
         player_group.draw(screen)
         enemies.draw(screen)
