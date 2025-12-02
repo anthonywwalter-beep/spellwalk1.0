@@ -21,7 +21,10 @@ GREEN = (0, 200, 0)
 PLAYER_SPEED = 3
 ENEMY_SPEED = 2
 PROJECTILE_SPEED = 7
+PROJECTILE_SIZE = 10  # Base projectile size
 enemy_dmg = 1
+EXP = 0
+LVL = 1
 SPAWNRATE = 2000  # Initial enemy spawn rate in milliseconds
 NEXT_WAVE_TIME = 30000  # Time until next wave in milliseconds
 
@@ -92,10 +95,10 @@ class Enemy(pygame.sprite.Sprite):
 
 # --- Projectile class ---
 class Projectile(pygame.sprite.Sprite):
-    def __init__(self, pos, direction):
+    def __init__(self, pos, direction, size=10):
         super().__init__()
         # Projectile representation (a white square)
-        self.image = pygame.Surface((10, 10))
+        self.image = pygame.Surface((size, size))
         self.image.fill(WHITE)
         self.rect = self.image.get_rect(center=pos)
         self.direction = direction # Direction vector
@@ -193,6 +196,7 @@ def options():
         pygame.display.flip()
 
 def play():
+    global EXP, LVL
     running = True
     timer = pygame.time.get_ticks()
     clock = pygame.time.Clock()
@@ -225,7 +229,9 @@ def play():
                 if dist == 0:
                     dist = 1
                 direction = (dx / dist, dy / dist)
-                projectiles.add(Projectile(player.rect.center, direction))
+                # Projectile size increases with level
+                proj_size = PROJECTILE_SIZE + (LVL - 1) * 2
+                projectiles.add(Projectile(player.rect.center, direction, proj_size))
 
         # Update all sprite groups
         player_group.update(keys)
@@ -235,7 +241,15 @@ def play():
 
         # Collision detection for projectiles hitting enemies
         for e in pygame.sprite.groupcollide(enemies, projectiles, True, True):
-            pass  # Enemy hit by projectile
+            # Enemy hit by projectile
+            EXP += 1
+            # Check for level up
+            if EXP > LVL * 5:
+                LVL += 1
+                EXP = 0
+                player.health += 10  # Heal player on level up
+                # Projectile size increases by 2 pixels per level (handled in projectile creation)
+
 
         # Check for collisions between player and enemies
         if pygame.sprite.spritecollideany(player, enemies):
@@ -252,6 +266,13 @@ def play():
         # Draw health bar
         pygame.draw.rect(screen, RED, (10, 10, 100, 20))
         pygame.draw.rect(screen, GREEN, (10, 10, player.health, 20))
+        
+        # Draw EXP and LVL
+        font = pygame.font.Font(None, 30)
+        exp_text = font.render(f"EXP: {EXP}", True, WHITE)
+        lvl_text = font.render(f"LVL: {LVL}", True, WHITE)
+        screen.blit(exp_text, (10, 40))
+        screen.blit(lvl_text, (10, 70))
     
         # Update the display
         pygame.display.flip()
