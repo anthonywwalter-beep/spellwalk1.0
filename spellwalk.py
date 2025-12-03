@@ -16,10 +16,14 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 WHITE = (255, 255, 255)
 RED = (200, 0, 0)
 GREEN = (0, 200, 0)
+DARK_RED = (100, 0, 0)
+PURPLE = (128, 0, 128)
 
 # Game constants/settings
 PLAYER_SPEED = 3
 ENEMY_SPEED = 2
+TANK_ENEMY_SPEED = 1  # Slower speed for tank enemy
+BOSS_ENEMY_SPEED = 1.5  # Speed for boss enemy
 PROJECTILE_SPEED = 7
 PROJECTILE_SIZE = 10  # Base projectile size
 enemy_dmg = 1
@@ -31,11 +35,13 @@ NEXT_WAVE_TIME = 30000  # Time until next wave in milliseconds
 # Timed events
 SPAWN_ENEMY = pygame.USEREVENT + 1
 FIRE_PROJECTILE = pygame.USEREVENT + 2
+SPAWN_TANK_ENEMY = pygame.USEREVENT + 3
 
 # Set timers for spawning enemies and firing projectiles
 
 pygame.time.set_timer(SPAWN_ENEMY, SPAWNRATE)
 pygame.time.set_timer(FIRE_PROJECTILE, 1000)
+pygame.time.set_timer(SPAWN_TANK_ENEMY, SPAWNRATE * 2)  # Spawn tank enemies less frequently
 
 
 # --- Player class ---
@@ -92,6 +98,62 @@ class Enemy(pygame.sprite.Sprite):
         # Update enemy position
         self.rect.x += dx * ENEMY_SPEED
         self.rect.y += dy * ENEMY_SPEED
+
+# --- Tank Enemy class ---
+class TankEnemy(pygame.sprite.Sprite):
+    def __init__(self, player):
+        super().__init__()
+        # Tank Enemy representation (a larger dark red square)
+        self.image = pygame.Surface((30, 30))
+        self.image.fill(DARK_RED)
+
+        # Spawn enemy at random edge position
+        x = random.choice([0, WIDTH])
+        y = random.choice([0, HEIGHT])
+        self.rect = self.image.get_rect(center=(x, y))
+        self.player = player  # Reference to player for tracking
+        self.health = 3  # Takes 3 hits to kill
+    
+    def update(self):
+        # Enemy movement towards player (slower than regular enemy)
+        dx = self.player.rect.centerx - self.rect.centerx
+        dy = self.player.rect.centery - self.rect.centery
+        dist = math.hypot(dx, dy)
+        if dist == 0:
+            dist = 1  # Prevent division by zero
+        dx, dy, = dx / dist, dy / dist  # Normalize direction vector
+
+        # Update enemy position with slower speed
+        self.rect.x += dx * TANK_ENEMY_SPEED
+        self.rect.y += dy * TANK_ENEMY_SPEED
+
+# --- Boss Enemy class ---
+class BossEnemy(pygame.sprite.Sprite):
+    def __init__(self, player):
+        super().__init__()
+        # Boss Enemy representation (a large purple square)
+        self.image = pygame.Surface((50, 50))
+        self.image.fill(PURPLE)
+
+        # Spawn boss at random edge position
+        x = random.choice([0, WIDTH])
+        y = random.choice([0, HEIGHT])
+        self.rect = self.image.get_rect(center=(x, y))
+        self.player = player  # Reference to player for tracking
+        self.health = 20  # Takes 20 hits to kill
+    
+    def update(self):
+        # Boss movement towards player
+        dx = self.player.rect.centerx - self.rect.centerx
+        dy = self.player.rect.centery - self.rect.centery
+        dist = math.hypot(dx, dy)
+        if dist == 0:
+            dist = 1  # Prevent division by zero
+        dx, dy, = dx / dist, dy / dist  # Normalize direction vector
+
+        # Update boss position
+        self.rect.x += dx * BOSS_ENEMY_SPEED
+        self.rect.y += dy * BOSS_ENEMY_SPEED
 
 # --- Projectile class ---
 class Projectile(pygame.sprite.Sprite):
@@ -220,6 +282,11 @@ def play():
             elif event.type == SPAWN_ENEMY:
                 enemies.add(Enemy(player))
 
+            # Spawn tank enemy event (only if player is level 5 or above)
+            elif event.type == SPAWN_TANK_ENEMY:
+                if LVL >= 5:
+                    enemies.add(TankEnemy(player))
+
             # Fire projectile event
             elif event.type == FIRE_PROJECTILE:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -240,15 +307,34 @@ def play():
 
 
         # Collision detection for projectiles hitting enemies
-        for e in pygame.sprite.groupcollide(enemies, projectiles, True, True):
-            # Enemy hit by projectile
-            EXP += 1
+        for e in pygame.sprite.groupcollide(enemies, projectiles, False, True):
+            # Check if enemy is a BossEnemy
+            if isinstance(e, BossEnemy):
+                e.health -= 1
+                if e.health <= 0:
+                    e.kill()
+                    EXP += 10  # Give more XP for killing boss enemy
+            # Check if enemy is a TankEnemy
+            elif isinstance(e, TankEnemy):
+                e.health -= 1
+                if e.health <= 0:
+                    e.kill()
+                    EXP += 3  # Give more XP for killing tank enemy
+            else:
+                e.kill()
+                EXP += 1
+            
             # Check for level up
-            if EXP > LVL * 5:
+            old_lvl = LVL
+            if EXP >= LVL * 5:
                 LVL += 1
                 EXP = 0
                 player.health += 10  # Heal player on level up
                 # Projectile size increases by 2 pixels per level (handled in projectile creation)
+                
+                # Spawn boss every 10 levels
+                if LVL % 10 == 0:
+                    enemies.add(BossEnemy(player))
 
 
         # Check for collisions between player and enemies
