@@ -33,6 +33,13 @@ class SpellManager:
         # Available spells (unlocked when selected)
         self.unlocked_spells = []
         
+        # Spell upgrade levels (tracks how many times each spell has been selected)
+        self.spell_levels = {
+            'lightning': 0,
+            'fireball': 0,
+            'freeze': 0
+        }
+        
         # Cooldowns
         self.lightning_cooldown = 0
         self.fireball_cooldown = 0
@@ -65,9 +72,15 @@ class SpellManager:
             self.combo_buffer.pop(0)
     
     def unlock_spell(self, spell_name):
-        """Unlock a spell for use"""
+        """Unlock a spell for use or upgrade it"""
         if spell_name not in self.unlocked_spells:
             self.unlocked_spells.append(spell_name)
+        # Increment spell level
+        self.spell_levels[spell_name] += 1
+    
+    def get_spell_level(self, spell_name):
+        """Get the upgrade level of a spell"""
+        return self.spell_levels.get(spell_name, 0)
     
     def check_lightning_combo(self, current_time):
         """Check if lightning spell combo is complete (Q -> W -> E -> R)"""
@@ -107,13 +120,18 @@ class SpellManager:
 
 
 class LightningSpell(pygame.sprite.Sprite):
-    def __init__(self, start_pos, target_pos):
+    def __init__(self, start_pos, target_pos, upgrade_level=1):
         super().__init__()
         self.start_pos = start_pos
         self.target_pos = target_pos
         self.duration = 500  # Lightning effect lasts 0.5 seconds
         self.creation_time = pygame.time.get_ticks()
-        self.damage = LIGHTNING_DAMAGE
+        self.upgrade_level = upgrade_level
+        
+        # Scale damage and effects with upgrade level
+        self.damage = LIGHTNING_DAMAGE + (upgrade_level - 1) * 3
+        self.chain_count = upgrade_level  # Chain to more enemies per level
+        
         self.hit_enemies = set()  # Track which enemies have been hit
         
         # Create a transparent surface for sprite (required for pygame sprite)
@@ -205,18 +223,29 @@ class LightningSpell(pygame.sprite.Sprite):
 
 
 class FireballSpell(pygame.sprite.Sprite):
-    def __init__(self, start_pos, direction):
+    def __init__(self, start_pos, direction, upgrade_level=1):
         super().__init__()
-        self.image = pygame.Surface((20, 20), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, ORANGE, (10, 10), 10)
-        pygame.draw.circle(self.image, BRIGHT_ORANGE, (10, 10), 6)
+        self.upgrade_level = upgrade_level
+        
+        # Scale size with upgrade level
+        base_size = 40
+        size = base_size + (upgrade_level - 1) * 10
+        radius = size // 2
+        
+        self.image = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, ORANGE, (radius, radius), radius)
+        pygame.draw.circle(self.image, BRIGHT_ORANGE, (radius, radius), int(radius * 0.6))
         
         self.rect = self.image.get_rect(center=start_pos)
         self.direction = direction
-        self.damage = FIREBALL_DAMAGE
-        self.speed = FIREBALL_SPEED
-        self.lifetime = 3000  # 3 seconds
+        
+        # Scale damage and speed with upgrade level
+        self.damage = FIREBALL_DAMAGE + (upgrade_level - 1) * 4
+        self.speed = FIREBALL_SPEED + (upgrade_level - 1) * 0.5
+        
+        self.lifetime = 3000 + (upgrade_level - 1) * 1000  # Longer lifetime per level
         self.creation_time = pygame.time.get_ticks()
+        self.hit_enemies = set()  # Track which enemies have been hit
     
     def update(self, current_time, screen_rect):
         """Update fireball position"""
@@ -229,11 +258,17 @@ class FireballSpell(pygame.sprite.Sprite):
 
 
 class FreezeSpell(pygame.sprite.Sprite):
-    def __init__(self, center_pos):
+    def __init__(self, center_pos, upgrade_level=1):
         super().__init__()
         self.center_pos = center_pos
-        self.radius = FREEZE_RADIUS
-        self.duration = FREEZE_DURATION
+        self.upgrade_level = upgrade_level
+        
+        # Scale radius and duration with upgrade level
+        self.radius = FREEZE_RADIUS + (upgrade_level - 1) * 50
+        self.duration = FREEZE_DURATION + (upgrade_level - 1) * 1000
+        self.slow_multiplier = 0.3 - (upgrade_level - 1) * 0.05  # Slows more per level (min 0.1)
+        self.slow_multiplier = max(0.1, self.slow_multiplier)
+        
         self.creation_time = pygame.time.get_ticks()
         self.affected_enemies = {}  # enemy_id: original_speed
         
@@ -284,8 +319,8 @@ class FreezeSpell(pygame.sprite.Sprite):
                 else:
                     self.affected_enemies[enemy_id] = 2  # Regular
             
-            # Slow down enemy by 70%
-            enemy.speed_multiplier = 0.3
+            # Slow down enemy
+            enemy.speed_multiplier = self.slow_multiplier
     
     def restore_enemy_speeds(self):
         """Restore all affected enemies to normal speed"""

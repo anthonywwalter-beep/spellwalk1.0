@@ -28,8 +28,8 @@ BOSS_ENEMY_SPEED = 1.5  # Speed for boss enemy
 PROJECTILE_SPEED = 7
 PROJECTILE_SIZE = 10  # Base projectile size
 enemy_dmg = 1
-EXP = 0
-LVL = 1
+EXP = 9
+LVL = 2
 SPAWNRATE = 2000  # Initial enemy spawn rate in milliseconds
 NEXT_WAVE_TIME = 30000  # Time until next wave in milliseconds
 
@@ -264,6 +264,7 @@ def options():
 def spell_selection_menu(spell_manager):
     """Display spell selection menu when player reaches level 3"""
     available_spells = ['lightning', 'fireball', 'freeze']
+    
     selected_spell = None
     
     # Create spell option boxes
@@ -271,7 +272,7 @@ def spell_selection_menu(spell_manager):
     for i, spell_key in enumerate(available_spells):
         x = WIDTH // 4 + i * (WIDTH // 4)
         y = HEIGHT // 2
-        rect = pygame.Rect(x - 100, y - 80, 200, 160)
+        rect = pygame.Rect(x - 100, y - 80, 200, 180)
         spell_rects.append((rect, spell_key))
     
     while selected_spell is None:
@@ -291,6 +292,7 @@ def spell_selection_menu(spell_manager):
         # Draw spell options
         for rect, spell_key in spell_rects:
             spell_info = SPELL_INFO[spell_key]
+            current_level = spell_manager.get_spell_level(spell_key)
             
             # Check if mouse is hovering
             is_hovering = rect.collidepoint(mouse_pos)
@@ -301,9 +303,12 @@ def spell_selection_menu(spell_manager):
             pygame.draw.rect(screen, bg_color, rect)
             pygame.draw.rect(screen, border_color, rect, 3)
             
-            # Draw spell name
+            # Draw spell name with level
             name_font = pygame.font.Font(None, 32)
-            name_text = name_font.render(spell_info['name'], True, WHITE)
+            spell_name = spell_info['name']
+            if current_level > 0:
+                spell_name += f" Lv.{current_level}"
+            name_text = name_font.render(spell_name, True, WHITE)
             screen.blit(name_text, (rect.centerx - name_text.get_width() // 2, rect.top + 15))
             
             # Draw combo
@@ -311,10 +316,14 @@ def spell_selection_menu(spell_manager):
             combo_text = combo_font.render(f"Combo: {spell_info['combo']}", True, (200, 200, 255))
             screen.blit(combo_text, (rect.centerx - combo_text.get_width() // 2, rect.top + 50))
             
-            # Draw description
-            desc_font = pygame.font.Font(None, 18)
-            desc_text = desc_font.render(spell_info['description'], True, (180, 180, 180))
-            screen.blit(desc_text, (rect.centerx - desc_text.get_width() // 2, rect.top + 80))
+            # Draw upgrade info or description
+            desc_font = pygame.font.Font(None, 16)
+            if current_level > 0:
+                upgrade_text = desc_font.render("UPGRADE: More Power!", True, (100, 255, 100))
+                screen.blit(upgrade_text, (rect.centerx - upgrade_text.get_width() // 2, rect.top + 80))
+            else:
+                desc_text = desc_font.render(spell_info['description'], True, (180, 180, 180))
+                screen.blit(desc_text, (rect.centerx - desc_text.get_width() // 2, rect.top + 80))
             
             # Draw stats
             stat_font = pygame.font.Font(None, 18)
@@ -356,16 +365,16 @@ def play():
     wave = 1
     spell_manager = SpellManager()
     spell_effects = pygame.sprite.Group()  # For lightning, fireballs, freeze effects
-    has_shown_spell_menu = False
+    last_spell_selection_level = 0
     
     while running:
         current_time = pygame.time.get_ticks()
         elapsed_time = current_time - timer
         
-        # Show spell selection menu at level 3
-        if LVL >= 3 and not has_shown_spell_menu:
+        # Show spell selection menu every 3 levels (3, 6, 9, 12, etc.)
+        if LVL >= 3 and LVL % 3 == 0 and LVL != last_spell_selection_level:
             spell_selection_menu(spell_manager)
-            has_shown_spell_menu = True
+            last_spell_selection_level = LVL
         
         if elapsed_time > NEXT_WAVE_TIME + (wave - 1) * 10000:
             pygame.time.set_timer(SPAWN_ENEMY, SPAWNRATE // 2)
@@ -413,7 +422,8 @@ def play():
         # Check for spell combos
         if spell_manager.check_lightning_combo(current_time):
             mouse_pos = pygame.mouse.get_pos()
-            lightning = LightningSpell(player.rect.center, mouse_pos)
+            upgrade_level = spell_manager.get_spell_level('lightning')
+            lightning = LightningSpell(player.rect.center, mouse_pos, upgrade_level)
             spell_effects.add(lightning)
         
         if spell_manager.check_fireball_combo(current_time):
@@ -424,11 +434,13 @@ def play():
             if dist == 0:
                 dist = 1
             direction = (dx / dist, dy / dist)
-            fireball = FireballSpell(player.rect.center, direction)
+            upgrade_level = spell_manager.get_spell_level('fireball')
+            fireball = FireballSpell(player.rect.center, direction, upgrade_level)
             spell_effects.add(fireball)
         
         if spell_manager.check_freeze_combo(current_time):
-            freeze = FreezeSpell(player.rect.center)
+            upgrade_level = spell_manager.get_spell_level('freeze')
+            freeze = FreezeSpell(player.rect.center, upgrade_level)
             spell_effects.add(freeze)
 
         # Update all sprite groups
@@ -468,21 +480,23 @@ def play():
             elif isinstance(effect, FireballSpell):
                 hit_enemies = pygame.sprite.spritecollide(effect, enemies, False)
                 for enemy in hit_enemies:
-                    effect.kill()  # Fireball disappears on hit
-                    if isinstance(enemy, BossEnemy):
-                        enemy.health -= effect.damage
-                        if enemy.health <= 0:
+                    enemy_id = id(enemy)
+                    # Only damage each enemy once
+                    if enemy_id not in effect.hit_enemies:
+                        effect.hit_enemies.add(enemy_id)
+                        if isinstance(enemy, BossEnemy):
+                            enemy.health -= effect.damage
+                            if enemy.health <= 0:
+                                enemy.kill()
+                                EXP += 10
+                        elif isinstance(enemy, TankEnemy):
+                            enemy.health -= effect.damage
+                            if enemy.health <= 0:
+                                enemy.kill()
+                                EXP += 3
+                        else:
                             enemy.kill()
-                            EXP += 10
-                    elif isinstance(enemy, TankEnemy):
-                        enemy.health -= effect.damage
-                        if enemy.health <= 0:
-                            enemy.kill()
-                            EXP += 3
-                    else:
-                        enemy.kill()
-                        EXP += 1
-                    break  # Fireball only hits one enemy
+                            EXP += 1
             
             elif isinstance(effect, FreezeSpell):
                 for enemy in enemies:
@@ -504,6 +518,30 @@ def play():
 
         # Collision detection for projectiles hitting enemies
         for e in pygame.sprite.groupcollide(enemies, projectiles, False, True):
+            # Lightning chain effect if lightning spell is upgraded to level 2+
+            lightning_level = spell_manager.get_spell_level('lightning')
+            if lightning_level >= 2:
+                # Create chain lightning from hit enemy to nearby enemies
+                chain_targets = []
+                for other_enemy in enemies:
+                    if other_enemy != e:
+                        dist = math.hypot(
+                            other_enemy.rect.centerx - e.rect.centerx,
+                            other_enemy.rect.centery - e.rect.centery
+                        )
+                        if dist < 150:  # Chain range
+                            chain_targets.append((dist, other_enemy))
+                
+                # Sort by distance and chain to closest enemies
+                chain_targets.sort(key=lambda x: x[0])
+                num_chains = min(lightning_level - 1, len(chain_targets))  # Level 2 = 1 chain, Level 3 = 2 chains, etc.
+                
+                for i in range(num_chains):
+                    target_enemy = chain_targets[i][1]
+                    # Create mini lightning effect
+                    mini_lightning = LightningSpell(e.rect.center, target_enemy.rect.center, 1)
+                    spell_effects.add(mini_lightning)
+            
             # Check if enemy is a BossEnemy
             if isinstance(e, BossEnemy):
                 e.health -= 1
