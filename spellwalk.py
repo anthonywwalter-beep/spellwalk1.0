@@ -596,7 +596,6 @@ def play():
         pygame.display.flip()
     
     # Reset game state after death
-    global EXP, LVL
     player.health = 100  # Reset player health for next game
     player.rect.center = (WIDTH // 2, HEIGHT // 2)  # Reset player position
     enemies.empty()  # Clear enemies
