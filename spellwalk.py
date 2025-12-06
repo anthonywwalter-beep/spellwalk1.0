@@ -28,8 +28,8 @@ BOSS_ENEMY_SPEED = 1.5  # Speed for boss enemy
 PROJECTILE_SPEED = 7
 PROJECTILE_SIZE = 10  # Base projectile size
 enemy_dmg = 1
-EXP = 0
-LVL = 1
+EXP = 194
+LVL = 39
 SPAWNRATE = 2000  # Initial enemy spawn rate in milliseconds
 NEXT_WAVE_TIME = 30000  # Time until next wave in milliseconds
 
@@ -367,6 +367,7 @@ def play():
     spell_manager = SpellManager()
     spell_effects = pygame.sprite.Group()  # For lightning, fireballs, freeze effects
     last_spell_selection_level = 0
+    last_level_for_spawn_update = 0  # Track when we last updated spawn rates
     
     while running:
         current_time = pygame.time.get_ticks()
@@ -376,6 +377,14 @@ def play():
         if LVL >= 3 and LVL % 3 == 0 and LVL != last_spell_selection_level:
             spell_selection_menu(spell_manager)
             last_spell_selection_level = LVL
+        
+        # Update tank spawn rate based on player level (after level 5)
+        if LVL >= 5 and LVL != last_level_for_spawn_update:
+            # Increase tank spawn frequency as player levels up
+            # Base: every 4 seconds, reduce by 100ms per level (minimum 1 second)
+            tank_spawn_rate = max(1000, SPAWNRATE * 2 - (LVL - 5) * 100)
+            pygame.time.set_timer(SPAWN_TANK_ENEMY, tank_spawn_rate)
+            last_level_for_spawn_update = LVL
         
         if elapsed_time > NEXT_WAVE_TIME + (wave - 1) * 10000:
             pygame.time.set_timer(SPAWN_ENEMY, SPAWNRATE // 2)
@@ -620,8 +629,14 @@ def play():
                 player.health += 10  # Heal player on level up
                 # Projectile size increases by 2 pixels per level (handled in projectile creation)
                 
-                # Spawn boss every 10 levels
+                # Spawn boss every 10 levels, plus extra bosses more frequently at higher levels
                 if LVL % 10 == 0:
+                    enemies.add(BossEnemy(player))
+                    # At level 20+, multiples of 10 get an extra boss
+                    if LVL >= 20:
+                        enemies.add(BossEnemy(player))
+                # After level 20, spawn additional bosses every 5 levels (25, 35, 45, etc.)
+                elif LVL >= 20 and LVL % 5 == 0:
                     enemies.add(BossEnemy(player))
 
 
