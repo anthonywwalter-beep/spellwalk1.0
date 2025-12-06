@@ -28,8 +28,8 @@ BOSS_ENEMY_SPEED = 1.5  # Speed for boss enemy
 PROJECTILE_SPEED = 7
 PROJECTILE_SIZE = 10  # Base projectile size
 enemy_dmg = 1
-EXP = 194
-LVL = 39
+EXP = 0
+LVL = 1
 SPAWNRATE = 2000  # Initial enemy spawn rate in milliseconds
 NEXT_WAVE_TIME = 30000  # Time until next wave in milliseconds
 
