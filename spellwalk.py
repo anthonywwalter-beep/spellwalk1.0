@@ -5,7 +5,7 @@ from button import Button
 import pygame_widgets
 from pygame_widgets.slider import Slider
 from pygame_widgets.textbox import TextBox
-from spells import SpellManager, LightningSpell, FireballSpell, FreezeSpell, SPELL_INFO
+from spells import SpellManager, LightningSpell, FireballSpell, FreezeSpell, FireballExplosion, SPELL_INFO
 
 
 # Initialize Pygame and constants
@@ -28,8 +28,8 @@ BOSS_ENEMY_SPEED = 1.5  # Speed for boss enemy
 PROJECTILE_SPEED = 7
 PROJECTILE_SIZE = 10  # Base projectile size
 enemy_dmg = 1
-EXP = 9
-LVL = 2
+EXP = 0
+LVL = 1
 SPAWNRATE = 2000  # Initial enemy spawn rate in milliseconds
 NEXT_WAVE_TIME = 30000  # Time until next wave in milliseconds
 
@@ -87,6 +87,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=(x, y))
         self.player = player # Reference to player for tracking
         self.speed_multiplier = 1.0  # For spell effects
+        self.health = 1  # Regular enemies have 1 health
     
     def update(self):
         # Enemy movement towards player
@@ -442,6 +443,11 @@ def play():
             upgrade_level = spell_manager.get_spell_level('freeze')
             freeze = FreezeSpell(player.rect.center, upgrade_level)
             spell_effects.add(freeze)
+            
+            # Grant bonus health for level 2+ freeze spell
+            if upgrade_level >= 2:
+                health_bonus = (upgrade_level - 1) * 5  # 5 health per level above 1
+                player.health = min(100, player.health + health_bonus)  # Cap at 100
 
         # Update all sprite groups
         player_group.update(keys)
@@ -456,47 +462,85 @@ def play():
                 effect.update(current_time, screen.get_rect())
             elif isinstance(effect, FreezeSpell):
                 effect.update(current_time)
+            elif isinstance(effect, FireballExplosion):
+                effect.update(current_time)
 
 
         # Spell effects on enemies
         for effect in spell_effects:
             if isinstance(effect, LightningSpell):
+                # Skip chain lightning (visual only, damage already applied)
+                if hasattr(effect, 'is_chain') and effect.is_chain:
+                    continue
+                    
                 for enemy in enemies:
                     if effect.check_hit(enemy):
-                        if isinstance(enemy, BossEnemy):
-                            enemy.health -= effect.damage
-                            if enemy.health <= 0:
-                                enemy.kill()
-                                EXP += 10
-                        elif isinstance(enemy, TankEnemy):
-                            enemy.health -= effect.damage
-                            if enemy.health <= 0:
-                                enemy.kill()
-                                EXP += 3
-                        else:
+                        enemy.health -= effect.damage
+                        if enemy.health <= 0:
                             enemy.kill()
-                            EXP += 1
+                            # Give XP based on enemy type
+                            if isinstance(enemy, BossEnemy):
+                                EXP += 10
+                            elif isinstance(enemy, TankEnemy):
+                                EXP += 3
+                            else:
+                                EXP += 1
             
             elif isinstance(effect, FireballSpell):
                 hit_enemies = pygame.sprite.spritecollide(effect, enemies, False)
-                for enemy in hit_enemies:
-                    enemy_id = id(enemy)
-                    # Only damage each enemy once
-                    if enemy_id not in effect.hit_enemies:
-                        effect.hit_enemies.add(enemy_id)
-                        if isinstance(enemy, BossEnemy):
-                            enemy.health -= effect.damage
-                            if enemy.health <= 0:
+                if hit_enemies:
+                    # If fireball is level 2+, create explosion on first hit
+                    if effect.upgrade_level >= 2 and len(effect.hit_enemies) == 0:
+                        explosion_pos = hit_enemies[0].rect.center
+                        explosion = FireballExplosion(explosion_pos, effect.upgrade_level)
+                        spell_effects.add(explosion)
+                        effect.kill()  # Destroy fireball after creating explosion
+                    else:
+                        # Normal fireball behavior for level 1 or after explosion created
+                        for enemy in hit_enemies:
+                            enemy_id = id(enemy)
+                            # Only damage each enemy once
+                            if enemy_id not in effect.hit_enemies:
+                                effect.hit_enemies.add(enemy_id)
+                                if isinstance(enemy, BossEnemy):
+                                    enemy.health -= effect.damage
+                                    if enemy.health <= 0:
+                                        enemy.kill()
+                                        EXP += 10
+                                elif isinstance(enemy, TankEnemy):
+                                    enemy.health -= effect.damage
+                                    if enemy.health <= 0:
+                                        enemy.kill()
+                                        EXP += 3
+                                else:
+                                    enemy.kill()
+                                    EXP += 1
+            
+            elif isinstance(effect, FireballExplosion):
+                # Deal damage over time to enemies in the explosion area
+                if effect.should_damage_now(current_time):
+                    damage_dealt = False
+                    for enemy in enemies:
+                        if effect.is_in_range((enemy.rect.centerx, enemy.rect.centery)):
+                            damage_dealt = True
+                            if isinstance(enemy, BossEnemy):
+                                enemy.health -= effect.damage_per_tick
+                                if enemy.health <= 0:
+                                    enemy.kill()
+                                    EXP += 10
+                            elif isinstance(enemy, TankEnemy):
+                                enemy.health -= effect.damage_per_tick
+                                if enemy.health <= 0:
+                                    enemy.kill()
+                                    EXP += 3
+                            else:
+                                # Regular enemies take full damage from DoT (instant kill on tick)
                                 enemy.kill()
-                                EXP += 10
-                        elif isinstance(enemy, TankEnemy):
-                            enemy.health -= effect.damage
-                            if enemy.health <= 0:
-                                enemy.kill()
-                                EXP += 3
-                        else:
-                            enemy.kill()
-                            EXP += 1
+                                EXP += 1
+                    
+                    # Reset timer after dealing damage
+                    if damage_dealt:
+                        effect.reset_damage_timer(current_time)
             
             elif isinstance(effect, FreezeSpell):
                 for enemy in enemies:
@@ -538,25 +582,35 @@ def play():
                 
                 for i in range(num_chains):
                     target_enemy = chain_targets[i][1]
-                    # Create mini lightning effect
-                    mini_lightning = LightningSpell(e.rect.center, target_enemy.rect.center, 1)
-                    spell_effects.add(mini_lightning)
+                    # Only damage if enemy is still alive
+                    if target_enemy.alive():
+                        # Deal 1 damage to chained enemy (works for all enemy types now)
+                        target_enemy.health -= 1
+                        if target_enemy.health <= 0:
+                            target_enemy.kill()
+                            # Give XP based on enemy type
+                            if isinstance(target_enemy, BossEnemy):
+                                EXP += 10
+                            elif isinstance(target_enemy, TankEnemy):
+                                EXP += 3
+                            else:
+                                EXP += 1
+                        
+                        # Create mini lightning visual effect (mark as chain for visual only)
+                        mini_lightning = LightningSpell(e.rect.center, target_enemy.rect.center, 1, is_chain=True)
+                        spell_effects.add(mini_lightning)
             
-            # Check if enemy is a BossEnemy
-            if isinstance(e, BossEnemy):
-                e.health -= 1
-                if e.health <= 0:
-                    e.kill()
-                    EXP += 10  # Give more XP for killing boss enemy
-            # Check if enemy is a TankEnemy
-            elif isinstance(e, TankEnemy):
-                e.health -= 1
-                if e.health <= 0:
-                    e.kill()
-                    EXP += 3  # Give more XP for killing tank enemy
-            else:
+            # Damage enemy based on type (all enemies now have health)
+            e.health -= 1
+            if e.health <= 0:
                 e.kill()
-                EXP += 1
+                # Give XP based on enemy type
+                if isinstance(e, BossEnemy):
+                    EXP += 10
+                elif isinstance(e, TankEnemy):
+                    EXP += 3
+                else:
+                    EXP += 1
             
             # Check for level up
             old_lvl = LVL
@@ -588,6 +642,8 @@ def play():
             if isinstance(effect, LightningSpell):
                 effect.draw(screen)
             elif isinstance(effect, FreezeSpell):
+                effect.draw(screen, current_time)
+            elif isinstance(effect, FireballExplosion):
                 effect.draw(screen, current_time)
         
         # Spell effects are sprites, so fireballs draw automatically via the group

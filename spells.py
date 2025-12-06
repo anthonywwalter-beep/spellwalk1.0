@@ -120,13 +120,14 @@ class SpellManager:
 
 
 class LightningSpell(pygame.sprite.Sprite):
-    def __init__(self, start_pos, target_pos, upgrade_level=1):
+    def __init__(self, start_pos, target_pos, upgrade_level=1, is_chain=False):
         super().__init__()
         self.start_pos = start_pos
         self.target_pos = target_pos
         self.duration = 500  # Lightning effect lasts 0.5 seconds
         self.creation_time = pygame.time.get_ticks()
         self.upgrade_level = upgrade_level
+        self.is_chain = is_chain  # Chain lightning is visual only
         
         # Scale damage and effects with upgrade level
         self.damage = LIGHTNING_DAMAGE + (upgrade_level - 1) * 3
@@ -255,6 +256,57 @@ class FireballSpell(pygame.sprite.Sprite):
         # Remove if off screen or lifetime expired
         if not screen_rect.colliderect(self.rect) or current_time - self.creation_time > self.lifetime:
             self.kill()
+
+
+class FireballExplosion(pygame.sprite.Sprite):
+    def __init__(self, center_pos, upgrade_level):
+        super().__init__()
+        self.center_pos = center_pos
+        self.upgrade_level = upgrade_level
+        self.radius = 80 + (upgrade_level - 2) * 20  # Larger radius for higher levels
+        self.duration = 2000 + (upgrade_level - 2) * 500  # Lasts longer at higher levels
+        self.creation_time = pygame.time.get_ticks()
+        self.damage_per_tick = 1  # Damage dealt every tick
+        self.tick_rate = 500  # Damage every 0.5 seconds
+        self.last_damage_time = self.creation_time
+        
+        # Create a transparent surface for sprite
+        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=center_pos)
+    
+    def update(self, current_time):
+        """Update explosion effect"""
+        if current_time - self.creation_time > self.duration:
+            self.kill()
+    
+    def draw(self, surface, current_time):
+        """Draw the fire explosion effect"""
+        # Pulsing effect
+        elapsed = current_time - self.creation_time
+        pulse = abs(math.sin(elapsed / 150)) * 0.2 + 0.8
+        
+        # Draw multiple rings for fire effect
+        for i in range(3):
+            radius = int(self.radius * pulse) - i * 15
+            if radius > 0:
+                alpha = int(150 * (1 - i / 3))
+                # Draw orange/red fire rings
+                color = ORANGE if i % 2 == 0 else (255, 100, 0)
+                pygame.draw.circle(surface, color, self.center_pos, radius, 2)
+    
+    def is_in_range(self, enemy_pos):
+        """Check if position is within explosion radius"""
+        dx = enemy_pos[0] - self.center_pos[0]
+        dy = enemy_pos[1] - self.center_pos[1]
+        return math.hypot(dx, dy) <= self.radius
+    
+    def should_damage_now(self, current_time):
+        """Check if it's time to deal damage"""
+        return current_time - self.last_damage_time >= self.tick_rate
+    
+    def reset_damage_timer(self, current_time):
+        """Reset the damage timer after dealing damage"""
+        self.last_damage_time = current_time
 
 
 class FreezeSpell(pygame.sprite.Sprite):
